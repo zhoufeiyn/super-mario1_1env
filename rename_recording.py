@@ -174,13 +174,14 @@ def rename_frames(user_name, recording_dir, frame_data):
     
     if not os.path.exists(frames_dir):
         print(f"错误: 找不到frames目录 {frames_dir}")
-        return False
+        return False, []
     
     print(f"开始重命名 {len(frame_data)} 个文件...")
     
     renamed_count = 0
     error_count = 0
     skipped_count = 0
+    failed_frames = []  # 记录失败的帧信息
     
     for frame_info in frame_data:
         frame_id = frame_info['frame_id']
@@ -207,20 +208,27 @@ def rename_frames(user_name, recording_dir, frame_data):
             if os.path.exists(old_path):
                 os.rename(old_path, new_path)
                 renamed_count += 1
-                print(f"重命名: {old_filename} -> {new_filename}")
             else:
-                print(f"警告: 文件不存在 {old_filename}")
                 error_count += 1
+                # 记录失败的帧信息
+                failed_frames.append({
+                    'frame_id': frame_id,
+                    'error_reason': '文件不存在'
+                })
         except Exception as e:
-            print(f"错误: 重命名失败 {old_filename} - {e}")
             error_count += 1
+            # 记录失败的帧信息
+            failed_frames.append({
+                'frame_id': frame_id,
+                'error_reason': str(e)
+            })
     
     print(f"\n重命名完成!")
     print(f"成功: {renamed_count} 个文件")
     print(f"失败: {error_count} 个文件")
     print(f"跳过: {skipped_count} 个文件 (无对应图片)")
     
-    return error_count == 0
+    return error_count == 0, failed_frames
 
 
 def update_json_data(recording_dir, frame_data, user_name):
@@ -317,7 +325,7 @@ def main():
     
     # 重命名文件
     print("\n开始重命名...")
-    success = rename_frames(user_name, recording_dir, frame_data)
+    success, failed_frames = rename_frames(user_name, recording_dir, frame_data)
     
     if success:
         # 更新JSON文件
@@ -326,6 +334,14 @@ def main():
         print("\n✅ 重命名完成!")
     else:
         print("\n❌ 重命名过程中出现错误")
+        
+        # 显示失败的帧信息
+        if failed_frames:
+            print(f"\n失败的帧 (共 {len(failed_frames)} 个):")
+            print("=" * 50)
+            for failed_frame in failed_frames:
+                print(f"帧ID: {failed_frame['frame_id']} - 失败原因: {failed_frame['error_reason']}")
+        
         sys.exit(1)
 
 
