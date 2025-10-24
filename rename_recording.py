@@ -168,6 +168,41 @@ def load_recording_data_simple(recording_dir):
         return None
 
 
+def calculate_death_status(frame_data):
+    """计算考虑连续帧的死亡状态"""
+    if not frame_data:
+        return []
+    
+    death_statuses = []
+    
+    for i, frame_info in enumerate(frame_data):
+        mario_dead = frame_info['mario_dead']
+        
+        # 获取前后帧的死亡状态
+        prev_dead = frame_data[i-1]['mario_dead'] if i > 0 else False
+        next_dead = frame_data[i+1]['mario_dead'] if i < len(frame_data) - 1 else False
+        
+        # 根据规则计算nt值
+        if mario_dead:
+            # 当前帧是死亡状态
+            if not prev_dead and not next_dead:
+                # 只有一帧死亡，前后都活着
+                death_status = 0
+            elif prev_dead and not next_dead:
+                # 连续死亡序列的最后一帧
+                death_status = 0
+            else:
+                # 连续死亡序列的中间帧或第一帧
+                death_status = 1
+        else:
+            # 当前帧是活着状态
+            death_status = 1
+        
+        death_statuses.append(death_status)
+    
+    return death_statuses
+
+
 def rename_frames(user_name, recording_dir, frame_data):
     """重命名帧图片文件"""
     frames_dir = os.path.join(recording_dir, "frames")
@@ -178,15 +213,17 @@ def rename_frames(user_name, recording_dir, frame_data):
     
     print(f"开始重命名 {len(frame_data)} 个文件...")
     
+    # 计算所有帧的死亡状态
+    death_statuses = calculate_death_status(frame_data)
+    
     renamed_count = 0
     error_count = 0
     skipped_count = 0
     failed_frames = []  # 记录失败的帧信息
     
-    for frame_info in frame_data:
+    for i, frame_info in enumerate(frame_data):
         frame_id = frame_info['frame_id']
         action_code = frame_info['action_code']
-        mario_dead = frame_info['mario_dead']
         old_filename = frame_info.get('frame_filename')  # 使用get方法避免KeyError
         
         # 检查old_filename是否为None
@@ -194,9 +231,8 @@ def rename_frames(user_name, recording_dir, frame_data):
             skipped_count += 1
             continue
         
-        # 生成新文件名
-        # 死亡状态: True=0, False=1
-        death_status = 0 if mario_dead else 1
+        # 使用计算出的死亡状态
+        death_status = death_statuses[i]
         
         # 新文件名格式: user_fxxx_axxx_ntxxx.png
         new_filename = f"{user_name}_f{frame_id}_a{action_code}_nt{death_status}.png"
@@ -239,14 +275,16 @@ def update_json_data(recording_dir, frame_data, user_name):
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
+        # 计算所有帧的死亡状态
+        death_statuses = calculate_death_status(frame_data)
+        
         # 更新帧数据中的文件名
         for i, frame_info in enumerate(frame_data):
             frame_id = frame_info['frame_id']
             action_code = frame_info['action_code']
-            mario_dead = frame_info['mario_dead']
             
-            # 生成新文件名
-            death_status = 0 if mario_dead else 1
+            # 使用计算出的死亡状态
+            death_status = death_statuses[i]
             new_filename = f"{user_name}_f{frame_id}_a{action_code}_nt{death_status}.png"
             
             # 更新JSON数据（只有当原文件名不为None时才更新）
